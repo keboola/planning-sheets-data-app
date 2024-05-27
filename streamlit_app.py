@@ -281,7 +281,7 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
         sort_option = st.selectbox("Sort By Name", ["Sort By Name", "Sort By Date Created", "Sort By Date Updated"],label_visibility="collapsed")
     
     with col_upload:
-        if st.button(":open_file_folder: Upload New Data", on_click=on_click_uploads, use_container_width = True):
+        if st.button("Upload New Data", on_click=on_click_uploads, use_container_width = True):
             pass
 
     # Filtrace dat podle vyhledávacího dotazu
