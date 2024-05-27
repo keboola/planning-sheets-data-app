@@ -14,13 +14,23 @@ st.set_page_config(page_title="Keboola Sheets App", page_icon=":robot:", layout=
 # Constants
 token = st.secrets["kbc_storage_token"]
 url = st.secrets["kbc_url"]
+kbc_token = st.secrets["kbc_token"]
+kbc_url = st.secrets["kbc_url"]
 LOGO_IMAGE_PATH = os.path.abspath("./app/static/keboola.png")
 
 # Initialize Client
 client = Client(url, token)
+kbc_client = Client(kbc_url, kbc_token)
+
+if 'data_load_time_table' not in st.session_state:
+        st.session_state['data_load_time_table'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+if 'data_load_time_overview' not in st.session_state:
+        st.session_state['data_load_time_overview'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
 
 # Fetching data 
-@st.cache_data(ttl=7200,show_spinner=False)
+@st.cache_data(ttl=60,show_spinner=False)
 def get_dataframe(table_name):
     table_detail = client.tables.detail(table_name)
 
@@ -52,11 +62,31 @@ def init():
 
     if 'upload-tables' not in st.session_state:
         st.session_state["upload-tables"] = False
+    
+    if 'log-exists' not in st.session_state:
+        st.session_state["log-exists"] = False
+
+    if st.session_state["log-exists"] == False:
+        try: 
+            kbc_client.buckets.detail("in.c-keboolasheets")
+            print("Bucket exists")
+        except:
+            kbc_client.buckets.create("in.c-keboolasheets", "keboolasheets")
+            print("Bucket created")
+        try:
+            kbc_client.tables.detail("in.c-keboolasheets.log")
+            print("Table exists")
+            st.session_state["log-exists"] = True
+        except:
+            kbc_client.tables.create(name="log", bucket_id='in.c-keboolasheets', file_path=f'app/static/init_log.csv', primary_key=['table_id', 'log_time', 'user', 'new'])
+            print("Table created")
+            st.session_state["log-exists"] = True
 
 def update_session_state(table_id):
     with st.spinner('Loading ...'):
         st.session_state['selected-table'] = table_id
         st.session_state['data'] = get_dataframe(st.session_state['selected-table'])
+        st.session_state['data_load_time_table'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     st.rerun()
      
 
@@ -90,7 +120,7 @@ def display_table_card(row):
             },
          "title": {
                 "font-size": "24px",
-                "color": "#0068C9",
+                "color": "#1F8FFF",
                 "padding-left":"5%",
                 "align-self": "flex-start",}
         
@@ -116,7 +146,8 @@ def ChangeButtonColour(widget_label, font_color, background_color, border_color)
     components.html(f"{htmlstr}", height=0, width=0)
 
 # Fetch and prepare table IDs and short description
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=60)
+
 def fetch_all_ids():
     all_tables = client.tables.list()
     ids_list = [{'table_id': table["id"], 'displayName': table["displayName"], 'primaryKey': table["primaryKey"][0] if table["primaryKey"] else "",
@@ -180,15 +211,21 @@ def resetSetting():
     st.session_state['selected-table'] = None
     st.session_state['data'] = None 
 
-def write_to_log(data, table, incremental):
+def write_to_log(data):
     now = datetime.datetime.now()
     log_df = pd.DataFrame({
-            'table_id': table,
+            'table_id': "in.c-keboolasheets.log",
             'new': [data],
             'log_time': now,
             'user': "PlaceHolderUserID"
         })
-    write_to_keboola(log_df, f'in.c-keboolasheets.log',f'updated_data_log.csv.gz', incremental)
+    log_df.to_csv(f'updated_data_log.csv.gz', index=False, compression='gzip')
+
+    # Load the CSV file into Keboola, updating existing records
+    kbc_client.tables.load(
+        table_id="in.c-keboolasheets.log",
+        file_path=f'updated_data_log.csv.gz',
+        is_incremental=True)
 
 def cast_bool_columns(df):
     """Ensure that columns that should be boolean are explicitly cast to boolean."""
@@ -204,24 +241,33 @@ st.session_state["tables_id"] = fetch_all_ids()
 
 if st.session_state['selected-table'] is None and (st.session_state['upload-tables'] is None or st.session_state['upload-tables'] == False):
     #LOGO
-    row = st.columns(10)  # Create a list of 5 columns with equal width
-    tile = row[0].container(border=False)  # Use only the first column
-    tile.image(LOGO_IMAGE_PATH)  # Place an image in the first column
-    #Keboola title
-    st.title(":blue[Keboola] Data Editor")
+   
+      # Place an image in the first column
+    col1, col2, col3 = st.columns((1,7,2))
+    with col1:
+        st.image(LOGO_IMAGE_PATH)
 
+        hide_img_fs = '''
+        <style>
+        button[title="View fullscreen"]{
+            visibility: hidden;}
+        </style>
+        '''
+
+        st.markdown(hide_img_fs, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"**Data Freshness:** \n {st.session_state['data_load_time_overview']}")
+
+    #Keboola title
+    st.markdown("""<h1 style="font-size:32px;"><span style="color:#1F8FFF;">Keboola</span> Data Editor</h1>""", unsafe_allow_html=True)
     st.info('Select the table you want to edit. If the data is not up-to-data, click on the Reload Data button.', icon="ℹ️")
 
     # Title of the Streamlit app
-    c1, c2 = st.columns((90,10))
-    with c1:
-        st.subheader("Tables")
-    with c2:
-        if st.button(":open_file_folder: Upload New Data", on_click=on_click_uploads, use_container_width = True):
-            pass
+    st.subheader("Tables")
 
     # Search bar and sorting options
-    search_col, sort_col, but_col1 = st.columns((60,30,10))
+    search_col, sort_col, but_col1, col_upload = st.columns((50,25,10,15))
 
     with but_col1:
         if st.button("Reload Data", key="reload-tables", use_container_width = True, type="secondary"):
@@ -233,6 +279,10 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
 
     with sort_col:
         sort_option = st.selectbox("Sort By Name", ["Sort By Name", "Sort By Date Created", "Sort By Date Updated"],label_visibility="collapsed")
+    
+    with col_upload:
+        if st.button(":open_file_folder: Upload New Data", on_click=on_click_uploads, use_container_width = True):
+            pass
 
     # Filtrace dat podle vyhledávacího dotazu
     if search_query:
@@ -254,13 +304,17 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
         # row['displayName'], row['table_id'],row['lastImportDate'],row['created']
 
 elif st.session_state['selected-table']is not None and (st.session_state['upload-tables'] is None or st.session_state['upload-tables'] == False):
-    col1,col2,col3,col4= st.columns(4)
+    col1,col2,col4= st.columns((2,7,2))
     with col1:
         st.button(":gray[:arrow_left: Back to Tables]", on_click=resetSetting, type="secondary")
+    with col4:
+         st.markdown(f"**Data Freshness:** \n {st.session_state['data_load_time_table']}")
+
     # Data Editor
     st.title("Data Editor")
+  
     # Info
-    st.info('After clicking the Sava Data button, the data will be sent to Keboola Storage using a full load. If the data is not up-to-date, click on the Reload Data button. ', icon="ℹ️")
+    st.info('After clicking the Sava Data button, the data will be sent to Keboola Storage using an incremental load when primary keys are set, otherwise full load is used. If the data is not up-to-date, click on the Reload Data button. ', icon="ℹ️")
     # Reload Button
     if st.button("Reload Data", key="reload-table",use_container_width=True ):
             st.session_state["tables_id"] = fetch_all_ids()
@@ -299,8 +353,9 @@ elif st.session_state['selected-table']is not None and (st.session_state['upload
             st.session_state["data"] = edited_data
             concatenated_df = pd.concat([kbc_data, edited_data])
             sym_diff_df = concatenated_df.drop_duplicates(keep=False)
-            write_to_log(sym_diff_df, st.session_state["selected-table"], True)
-            write_to_keboola(edited_data, st.session_state["selected-table"],f'updated_data.csv.gz', False)
+            write_to_log(sym_diff_df)
+            is_incremental = bool(selected_row.get('primaryKey', False))   
+            write_to_keboola(edited_data, st.session_state["selected-table"],f'updated_data.csv.gz', is_incremental)
         st.success('Data Updated!', icon = "🎉")
 
     ChangeButtonColour('Save Data', '#FFFFFF', '#1EC71E','#1EC71E')
