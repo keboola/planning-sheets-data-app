@@ -9,7 +9,7 @@ import datetime
 import time
 
 # Setting page config
-st.set_page_config(page_title="Keboola Sheets App", page_icon=":robot:", layout="wide")
+st.set_page_config(page_title="Keboola Data Editor", page_icon=":robot:", layout="wide")
 
 # Constants
 token = st.secrets["kbc_storage_token"]
@@ -260,7 +260,8 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
 
     #Keboola title
     st.markdown("""<h1 style="font-size:32px;"><span style="color:#1F8FFF;">Keboola</span> Data Editor</h1>""", unsafe_allow_html=True)
-    st.info('Select the table you want to edit. If the data is not up-to-data, click on the Reload Data button.', icon="ℹ️")
+    st.markdown("""<h2 style="font-size:32px;">Discover how Streamlit can seamlessly integrate with <span style="color:#1F8FFF;">Keboola Storage!</span></h2>""", unsafe_allow_html=True)
+    st.info('Select the table you want to edit. If the data is not up-to-data, click on the Reload Data button. Data freshness is displayed in the right corner.', icon="ℹ️")
 
     # Title of the Streamlit app
     st.subheader("Tables")
@@ -313,7 +314,7 @@ elif st.session_state['selected-table']is not None and (st.session_state['upload
     st.title("Data Editor")
   
     # Info
-    st.info('After clicking the Sava Data button, the data will be sent to Keboola Storage using an incremental load when primary keys are set, otherwise full load is used. If the data is not up-to-date, click on the Reload Data button. ', icon="ℹ️")
+    st.info('After clicking the Save Data button, the data will be sent to Keboola Storage using an incremental load when primary keys are set; otherwise, a full load is used. If the data is not up-to-date, click on the Reload Data button. Data freshness is displayed in the right corner.', icon="ℹ️")
     # Reload Button
     if st.button("Reload Data", key="reload-table",use_container_width=True ):
             st.session_state["tables_id"] = fetch_all_ids()
