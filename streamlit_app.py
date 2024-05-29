@@ -18,7 +18,7 @@ kbc_token = st.secrets["kbc_token"]
 LOGO_IMAGE_PATH = os.path.abspath("./app/static/keboola.png")
 
 # Initialize Client
-client = Client(url, token)
+client = Client(kbc_url, token)
 kbc_client = Client(kbc_url, kbc_token)
 
 if 'data_load_time_table' not in st.session_state:
