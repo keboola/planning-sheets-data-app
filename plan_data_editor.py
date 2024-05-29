@@ -65,21 +65,21 @@ def init():
     if 'log-exists' not in st.session_state:
         st.session_state["log-exists"] = False
 
-    if st.session_state["log-exists"] == False:
-        try: 
-            kbc_client.buckets.detail("in.c-keboolasheets")
-            print("Bucket exists")
-        except:
-            kbc_client.buckets.create("in.c-keboolasheets", "keboolasheets")
-            print("Bucket created")
-        try:
-            kbc_client.tables.detail("in.c-keboolasheets.log")
-            print("Table exists")
-            st.session_state["log-exists"] = True
-        except:
-            kbc_client.tables.create(name="log", bucket_id='in.c-keboolasheets', file_path=f'app/static/init_log.csv', primary_key=['table_id', 'log_time', 'user', 'new'])
-            print("Table created")
-            st.session_state["log-exists"] = True
+    # if st.session_state["log-exists"] == False:
+    #     try: 
+    #         kbc_client.buckets.detail("in.c-keboolasheets")
+    #         print("Bucket exists")
+    #     except:
+    #         kbc_client.buckets.create("in.c-keboolasheets", "keboolasheets")
+    #         print("Bucket created")
+    #     try:
+    #         kbc_client.tables.detail("in.c-keboolasheets.log")
+    #         print("Table exists")
+    #         st.session_state["log-exists"] = True
+    #     except:
+    #         kbc_client.tables.create(name="log", bucket_id='in.c-keboolasheets', file_path=f'app/static/init_log.csv', primary_key=['table_id', 'log_time', 'user', 'new'])
+    #         print("Table created")
+    #         st.session_state["log-exists"] = True
 
 def update_session_state(table_id):
     with st.spinner('Loading ...'):
@@ -353,7 +353,7 @@ elif st.session_state['selected-table']is not None and (st.session_state['upload
             st.session_state["data"] = edited_data
             concatenated_df = pd.concat([kbc_data, edited_data])
             sym_diff_df = concatenated_df.drop_duplicates(keep=False)
-            write_to_log(sym_diff_df)
+            #write_to_log(sym_diff_df)
             is_incremental = bool(selected_row.get('primaryKey', False))   
             write_to_keboola(edited_data, st.session_state["selected-table"],f'updated_data.csv.gz', is_incremental)
         st.success('Data Updated!', icon = "🎉")
