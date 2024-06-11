@@ -9,7 +9,7 @@ import datetime
 import time
 
 # Setting page config
-st.set_page_config(page_title="Keboola Data Editor", page_icon=":robot:", layout="wide")
+st.set_page_config(page_title="Keboola Data Editor", page_icon=":robot:")
 
 # Constants
 token = st.secrets["kbc_storage_token"]
@@ -30,6 +30,24 @@ if 'data_load_time_overview' not in st.session_state:
 
 # Fetching data 
 @st.cache_data(ttl=60,show_spinner=False)
+
+def hide_custom_anchor_link():
+    st.markdown(
+        """
+        <style>
+            /* Hide anchors directly inside custom HTML headers */
+            h1 > a, h2 > a, h3 > a, h4 > a, h5 > a, h6 > a {
+                display: none !important;
+            }
+            /* If the above doesn't work, it may be necessary to target by attribute if Streamlit adds them dynamically */
+            [data-testid="stMarkdown"] h1 a, [data-testid="stMarkdown"] h3 a,[data-testid="stMarkdown"] h5 a,[data-testid="stMarkdown"] h2 a {
+                display: none !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    
 def get_dataframe(table_name):
     table_detail = client.tables.detail(table_name)
 
@@ -97,10 +115,15 @@ def display_table_card(row):
             "card": {
                 "width": "100%",
                 "height": "200px",
-                "box-shadow": "2px 2px 12px rgba(0,0,0,0.1)",
+                "box-shadow": "0px 1px 0px rgba(0,0,0,0.1)",
                 "margin": "0px",
                 "flex-direction": "column",  # Stack children vertically
                 "align-items": "flex-start",
+                "justify-content": "flex-start",
+                "padding": "0px",
+                "border-radius": "10px",
+                "overflow": "hidden",
+                "cursor": "pointer",
             },
             "filter": {
                 "background-color": "#FFFFFF"
@@ -108,11 +131,14 @@ def display_table_card(row):
         "div": {
             "padding":"0px",
             "display": "flex",
-            "align-items": "flex-start", 
+            "align-items": "flex-start",
+            "justify-content": "space-between",  # Adjust spacing within the div
+            "margin-bottom": "0px",  # Ensure no bottom margin
         },
          "text": {
                 "color": "#999A9F",
-                "padding-left":"5%",
+                "margin-left": "0px",  # Remove padding and use margin if necessary
+                "margin-bottom": "0px",  # Ensure no bottom margin
                 "align-self": "flex-start",
                 "font-size": "15px",
                 "font-weight": "lighter",
@@ -120,11 +146,10 @@ def display_table_card(row):
          "title": {
                 "font-size": "24px",
                 "color": "#1F8FFF",
-                "padding-left":"5%",
+                "margin-left": "0px",  # Remove padding-left
                 "align-self": "flex-start",}
-        
         },
-        image="https://upload.wikimedia.org/wikipedia/en/4/48/Blank.JPG" ,
+        image="https://upload.wikimedia.org/wikipedia/en/4/48/Blank.JPG",
         key=row['table_id'],
         on_click=lambda table_id=row['table_id']: update_session_state(table_id)
     )
@@ -166,21 +191,34 @@ def on_click_back():
 # table_name, table_id ,updated,created
 def display_table_section(row):
     with st.container():
-        # st.subheader(f":blue[{table_name}]")
-        # st.caption(table_id)
-        # st.caption(f"Created: {created}")
-        # st.caption(f"Updated: {updated}")
-        # st.markdown("""---""")
-
         display_table_card(row)
 
 
 def display_footer_section():
-    left_aligned, space_col, right_aligned = st.columns((2,7,1))
-    with left_aligned:
-        st.caption("© Keboola 2024")
-    with right_aligned:
-        st.caption("Version 2.0")
+    # Inject custom CSS for alignment and style
+    st.markdown("""
+        <style>
+            .footer {
+                width: 100%;
+                font-size: 14px;  /* Adjust font size as needed */
+                color: #22252999;  /* Adjust text color as needed */
+                padding: 10px 0;  /* Adjust padding as needed */
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .footer p {
+                margin: 0;  /* Removes default margin for p elements */
+                padding: 0;  /* Ensures no additional padding is applied */
+            }
+        </style>
+        <div class="footer">
+            <p>© Keboola 2024</p>
+            <p>Version 2.0</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+
 
 def write_to_keboola(data, table_name, table_path, incremental):
     """
@@ -259,15 +297,15 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
         st.markdown(f"**Data Freshness:** \n {st.session_state['data_load_time_overview']}")
 
     #Keboola title
+    hide_custom_anchor_link()
     st.markdown("""<h1 style="font-size:32px;"><span style="color:#1F8FFF;">Keboola</span> Data Editor</h1>""", unsafe_allow_html=True)
-    st.markdown("""<h2 style="font-size:32px;">Discover how Streamlit can seamlessly integrate with <span style="color:#1F8FFF;">Keboola Storage!</span></h2>""", unsafe_allow_html=True)
+    st.markdown("""<h2 style="font-size:18px;">Discover how Streamlit can seamlessly integrate with <span style="color:#1F8FFF;">Keboola Storage!</span></h2>""", unsafe_allow_html=True)
     st.info('Select the table you want to edit. If the data is not up-to-data, click on the Reload Data button. Data freshness is displayed in the right corner.', icon="ℹ️")
 
     # Title of the Streamlit app
-    st.subheader("Tables")
-
+    st.subheader("Tables", anchor=False)
     # Search bar and sorting options
-    search_col, sort_col, but_col1, col_upload = st.columns((50,25,10,15))
+    search_col, sort_col, but_col1, col_upload = st.columns((45,25,15,15))
 
     with but_col1:
         if st.button("Reload Data", key="reload-tables", use_container_width = True, type="secondary"):
@@ -298,6 +336,7 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
     elif sort_option == "By Date Updated":
         filtered_df = filtered_df.sort_values(by="lastImportDate", ascending=True)
 
+    st.markdown("<br>", unsafe_allow_html=True)
     # Looping through each row of the Tables ID
     for index, row in filtered_df.iterrows():
         display_table_section(row)
@@ -311,7 +350,7 @@ elif st.session_state['selected-table']is not None and (st.session_state['upload
          st.markdown(f"**Data Freshness:** \n {st.session_state['data_load_time_table']}")
 
     # Data Editor
-    st.title("Data Editor")
+    st.title("Data Editor", anchor=False)
   
     # Info
     st.info('After clicking the Save Data button, the data will be sent to Keboola Storage using an incremental load when primary keys are set; otherwise, a full load is used. If the data is not up-to-date, click on the Reload Data button. Data freshness is displayed in the right corner.', icon="ℹ️")
@@ -362,7 +401,7 @@ elif st.session_state['selected-table']is not None and (st.session_state['upload
 elif st.session_state['upload-tables']:
     if st.button(":gray[:arrow_left: Go back]", on_click=on_click_back):
         pass
-    st.title('Import Data into :blue[Keboola Storage]')
+    st.title('Import Data into :blue[Keboola Storage]', anchor=False)
     # List and display available buckets
     buckets = client.buckets.list()
     bucket_names = ["Create new bucket"]  # Add option to create a new bucket at the beginning
