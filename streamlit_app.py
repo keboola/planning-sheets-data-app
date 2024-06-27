@@ -6,6 +6,7 @@ import os
 import csv
 import pandas as pd
 import datetime
+import re
 import time
 
 # Setting page config
@@ -248,6 +249,10 @@ def resetSetting():
     st.session_state['selected-table'] = None
     st.session_state['data'] = None 
 
+def is_valid_table_name(name):
+    # Function to check if the table name is valid
+    return re.match("^[A-Za-z0-9_]+$", name) is not None
+
 def write_to_log(data):
     now = datetime.datetime.now()
     log_df = pd.DataFrame({
@@ -306,35 +311,35 @@ if st.session_state['selected-table'] is None and (st.session_state['upload-tabl
     st.subheader("Tables", anchor=False)
     # Search bar and sorting options
     search_col, sort_col, but_col1, col_upload = st.columns((45,25,15,15))
+    filtered_df = st.session_state["tables_id"]
 
     with but_col1:
         if st.button("Reload Data", key="reload-tables", use_container_width = True, type="secondary"):
             st.session_state["tables_id"] = fetch_all_ids()
             st.toast('Tables List Reloaded!', icon = "✅")
 
+    filtered_df = st.session_state["tables_id"]
+
     with search_col:
         search_query = st.text_input("Search for table", placeholder="Table Search",label_visibility="collapsed")
 
+        # Filtrace dat podle vyhledávacího dotazu
+        if search_query:
+            filtered_df = st.session_state["tables_id"][st.session_state["tables_id"].apply(lambda row: search_query.lower() in str(row).lower(), axis=1)]
+
     with sort_col:
         sort_option = st.selectbox("Sort By Name", ["Sort By Name", "Sort By Date Created", "Sort By Date Updated"],label_visibility="collapsed")
-    
+        # Třídění dat
+        if sort_option == "Sort By Name":
+            filtered_df = filtered_df.sort_values(by="displayName", ascending=True)
+        elif sort_option == "Sort By Date Created":
+            filtered_df = filtered_df.sort_values(by="created", ascending=True)
+        elif sort_option == "Sort By Date Updated":
+            filtered_df = filtered_df.sort_values(by="lastImportDate", ascending=True)
     with col_upload:
         if st.button("Upload New Data", on_click=on_click_uploads, use_container_width = True):
             pass
 
-    # Filtrace dat podle vyhledávacího dotazu
-    if search_query:
-        filtered_df = st.session_state["tables_id"][st.session_state["tables_id"].apply(lambda row: search_query.lower() in str(row).lower(), axis=1)]
-    else:
-        filtered_df = st.session_state["tables_id"]
-    
-    # Třídění dat
-    if sort_option == "By Name":
-        filtered_df = filtered_df.sort_values(by="displayName", ascending=True)
-    elif sort_option == "By Date Created":
-        filtered_df = filtered_df.sort_values(by="created", ascending=True)
-    elif sort_option == "By Date Updated":
-        filtered_df = filtered_df.sort_values(by="lastImportDate", ascending=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     # Looping through each row of the Tables ID
@@ -430,45 +435,76 @@ elif st.session_state['upload-tables']:
 
     elif selected_bucket and selected_bucket != "Choose an option":
         # File uploader
-        uploaded_file = st.file_uploader("Upload a file", type=['csv', 'xlsx'])
+        uploaded_file = st.file_uploader("Upload a file", type=['csv', 'xlsx'], accept_multiple_files=True)
 
-        # Input for table name
-        table_name = st.text_input("Enter table name")
 
-        # Upload button
-        if st.button('Upload'):
-            if selected_bucket and uploaded_file and table_name:
-                # Check if the table name already exists in the selected bucket
-                existing_tables = client.buckets.list_tables(bucket_id=selected_bucket)
-                existing_table_names = [table['name'] for table in existing_tables]
+    # Input for table name
+    table_name = st.text_input("Enter table name")
 
-                if table_name in existing_table_names:
-                    st.error(f"Error: Table name '{table_name}' already exists in the selected bucket.")
+    # Upload button
+    if st.button('Upload'):
+        if not selected_bucket or not uploaded_file or not table_name:
+            st.error('Error: Please select a bucket, upload a file, and enter a table name. Please check if you have permission to create a new bucket and table.')
+        else:
+            with st.spinner('Uploading...'):
+                # Validate table name
+                if not is_valid_table_name(table_name):
+                    st.error("Error: Table name can only contain alphanumeric characters and underscores.")
                 else:
-                    # Save the uploaded file to a temporary path
-                    temp_file_path = f"/tmp/{uploaded_file.name}"
-                    with open(temp_file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+                    # Check if the table name already exists in the selected bucket
+                    existing_tables = client.buckets.list_tables(bucket_id=selected_bucket)
+                    existing_table_names = [table['name'] for table in existing_tables]
 
-                    # Create the table in the selected bucket
-                    try:
-                        client.tables.create(
-                            name=table_name,
-                            bucket_id=selected_bucket,
-                            file_path=temp_file_path,
-                            primary_key=[]
-                        )
-                        with st.spinner('Uploading...'):
-                            st.session_state["tables_id"] = fetch_all_ids()
-                            st.session_state['upload-tables'] = False
-                            st.session_state['selected-table'] = selected_bucket+"."+table_name
-                            time.sleep(5)
-                        st.success('File uploaded and table created successfully!', icon = "🎉")
-                        st.rerun()
+                    uploaded_file_name = uploaded_file[0].name
+                    print(uploaded_file_name)
 
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
-            else:
-                st.error('Error: Please select a bucket, upload a file, and enter a table name. Please check if you have permission to create a new bucket and table.')
+                    if table_name in existing_table_names:
+                        st.error(f"Error: Table name '{table_name}' already exists in the selected bucket.")
+                    else:
+                        # Save the uploaded file to a temporary path
+                        temp_file_path = f"/tmp/{uploaded_file_name}"
+                        with open(temp_file_path, "wb") as f:
+                            f.write(uploaded_file[0].getbuffer())
+
+                        print(uploaded_file)
+
+                        # Check if the file is an Excel file
+                        if uploaded_file_name.endswith('.xlsx'):
+                            df = pd.read_excel(temp_file_path)
+                            print(df)  # Print the DataFrame to check its content
+
+                            # Remove duplicate columns
+                            df = df.loc[:, ~df.columns.duplicated()]
+
+                            # Save the cleaned DataFrame as CSV
+                            temp_csv_file_path = temp_file_path.replace('.xlsx', '.csv')
+                            df.to_csv(temp_csv_file_path, index=False)
+
+                            # Update the temp file path to point to the CSV file
+                            temp_file_path = temp_csv_file_path
+
+                        try:
+                            # Create the table in the selected bucket
+                            client.tables.create(
+                                name=table_name,
+                                bucket_id=selected_bucket,
+                                file_path=temp_file_path,
+                                primary_key=[]
+                            )
+                            with st.spinner('Uploading...'):
+                                st.session_state["tables_id"] = fetch_all_ids()
+                                st.session_state['upload-tables'] = False
+                                st.session_state['selected-table'] = selected_bucket + "." + table_name
+                                time.sleep(5)
+                                st.success('File uploaded and table created successfully!', icon="🎉")
+                                resetSetting()
+                                time.sleep(1)
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+
+                    
+        
 
 display_footer_section()
