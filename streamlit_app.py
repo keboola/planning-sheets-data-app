@@ -89,7 +89,7 @@ def init():
             kbc_client.buckets.detail("in.c-keboolasheets")
             print("Bucket exists")
         except:
-            kbc_client.buckets.create("in.c-keboolasheets", "keboolasheets")
+            kbc_client.buckets.create(name="keboolasheets", stage="in")
             print("Bucket created")
         try:
             kbc_client.tables.detail("in.c-keboolasheets.log")
